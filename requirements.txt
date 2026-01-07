@@ -1,2 +1,6 @@
 pymupdf
 python-docx
+torch
+sentencepiece
+pandas
+tqdm
