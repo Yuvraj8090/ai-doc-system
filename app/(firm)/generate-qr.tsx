@@ -2,189 +2,127 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg'; // Library we just installed
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../../constants/Colors';
+
+const Colors = {
+    primary: '#06BBCC',
+    driverPrimary: '#4F46E5', // Indigo color for Drivers
+    white: '#FFFFFF',
+    background: '#0499A8',
+};
 
 export default function GenerateQR() {
-  const router = useRouter();
-  // Get params passed from Dashboard
-  const { boatId, boatName } = useLocalSearchParams();
+    const router = useRouter();
+    const params = useLocalSearchParams();
+    
+    // Check if we are viewing a Driver or a Boat
+    const isDriver = params.type === 'driver';
+    
+    // Dynamic Theme Color
+    const themeColor = isDriver ? Colors.driverPrimary : Colors.primary;
 
-  // Data to embed in the QR Code (As per DPR Section 4.4)
-  const qrData = JSON.stringify({
-    type: 'boat_sail',
-    boat_id: boatId,
-    boat_name: boatName,
-    timestamp: Date.now(),
-    firm_id: 'FIRM_001'
-  });
+    const qrData = JSON.stringify({
+        type: isDriver ? 'driver_verify' : 'boat_sail',
+        id: params.id,
+        name: params.name,
+        timestamp: Date.now()
+    });
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header with Back Button */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gate Pass Generation</Text>
-      </View>
-
-      <View style={styles.content}>
-        {/* Ticket Info Card */}
-        <View style={styles.ticketCard}>
-          <View style={styles.ticketHeader}>
-            <Text style={styles.firmName}>Himalayan Rafting Co.</Text>
-            <Text style={styles.date}>{new Date().toDateString()}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* The QR Code */}
-          <View style={styles.qrContainer}>
-            <QRCode
-              value={qrData}
-              size={200}
-              color="black"
-              backgroundColor="white"
-            />
-          </View>
-
-          <Text style={styles.instruction}>Show this QR to the Verifier at the river bank.</Text>
-
-          <View style={styles.boatDetails}>
-            <View style={styles.detailRow}>
-              <Text style={styles.label}>Boat Name</Text>
-              <Text style={styles.value}>{boatName}</Text>
+    return (
+        <SafeAreaView style={[styles.container, { backgroundColor: themeColor }]}>
+            {/* Header */}
+            <View style={styles.navBar}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
+                <Text style={styles.navTitle}>
+                    {isDriver ? 'Official ID Card' : 'Gate Pass'}
+                </Text>
+                <View style={{ width: 40 }} />
             </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.label}>Boat ID</Text>
-              <Text style={styles.value}>#{boatId}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.label}>Status</Text>
-              <Text style={[styles.value, { color: Colors.success }]}>Ready to Sail</Text>
-            </View>
-          </View>
-        </View>
 
-        {/* Action Buttons */}
-        <TouchableOpacity style={styles.doneButton} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Done</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
-  );
+            <View style={styles.content}>
+                {/* ID CARD / TICKET */}
+                <View style={styles.cardContainer}>
+                    
+                    {/* Header Strip */}
+                    <View style={[styles.cardHeader, { backgroundColor: themeColor }]}>
+                        <Text style={styles.headerText}>GOVT. APPROVED</Text>
+                    </View>
+
+                    <View style={styles.cardBody}>
+                        {/* Avatar / Icon */}
+                        <View style={styles.avatarContainer}>
+                            <Ionicons 
+                                name={isDriver ? "person" : "boat"} 
+                                size={40} 
+                                color={themeColor} 
+                            />
+                        </View>
+
+                        <Text style={styles.name}>{params.name}</Text>
+                        <Text style={styles.idText}>ID: {params.id}</Text>
+
+                        {/* QR Code */}
+                        <View style={styles.qrWrapper}>
+                            <QRCode value={qrData} size={180} />
+                        </View>
+                        
+                        <Text style={styles.helperText}>
+                            {isDriver ? 'Scan to verify Driver' : 'Scan to verify Boat'}
+                        </Text>
+
+                        {/* Details Grid */}
+                        <View style={styles.detailsBox}>
+                            <View style={styles.row}>
+                                <Text style={styles.label}>{isDriver ? 'License No' : 'Capacity'}</Text>
+                                <Text style={styles.value}>{params.details}</Text>
+                            </View>
+                            <View style={styles.row}>
+                                <Text style={styles.label}>Validity</Text>
+                                <Text style={[styles.value, { color: 'green' }]}>Active</Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Print/Share Button */}
+                <TouchableOpacity style={styles.printBtn} onPress={() => alert('Sent to Printer!')}>
+                    <Ionicons name="print-outline" size={20} color="white" />
+                    <Text style={styles.printText}>Print / Save Card</Text>
+                </TouchableOpacity>
+            </View>
+        </SafeAreaView>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.primary, // Blue background for contrast
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  backButton: {
-    padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 8,
-    marginRight: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 20,
-  },
-  ticketCard: {
-    backgroundColor: 'white',
-    width: '100%',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  ticketHeader: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  firmName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  date: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 4,
-  },
-  divider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 16,
-    borderStyle: 'dashed',
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  qrContainer: {
-    padding: 16,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  instruction: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  boatDetails: {
-    width: '100%',
-    backgroundColor: '#F5F7FA',
-    borderRadius: 12,
-    padding: 16,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 14,
-    color: '#888',
-  },
-  value: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  doneButton: {
-    marginTop: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    width: '100%',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+    container: { flex: 1 },
+    navBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20 },
+    backButton: { padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8 },
+    navTitle: { fontSize: 18, fontWeight: 'bold', color: 'white' },
+    
+    content: { flex: 1, padding: 20, alignItems: 'center', justifyContent: 'center' },
+    
+    cardContainer: { width: '100%', maxWidth: 350, backgroundColor: 'white', borderRadius: 20, overflow: 'hidden', elevation: 10 },
+    cardHeader: { padding: 10, alignItems: 'center' },
+    headerText: { color: 'white', fontWeight: 'bold', fontSize: 12, letterSpacing: 1 },
+    
+    cardBody: { padding: 24, alignItems: 'center' },
+    avatarContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+    
+    name: { fontSize: 22, fontWeight: 'bold', color: '#333', textAlign: 'center' },
+    idText: { fontSize: 14, color: '#888', marginBottom: 20 },
+    
+    qrWrapper: { padding: 10, borderWidth: 1, borderColor: '#eee', borderRadius: 10, marginBottom: 12 },
+    helperText: { fontSize: 12, color: '#999', marginBottom: 20 },
+    
+    detailsBox: { width: '100%', backgroundColor: '#F9FAFB', padding: 16, borderRadius: 12, gap: 12 },
+    row: { flexDirection: 'row', justifyContent: 'space-between' },
+    label: { fontSize: 14, color: '#666' },
+    value: { fontSize: 14, fontWeight: 'bold', color: '#333' },
+
+    printBtn: { flexDirection: 'row', marginTop: 30, backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 14, paddingHorizontal: 30, borderRadius: 30, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', gap: 8 },
+    printText: { color: 'white', fontWeight: 'bold' }
 });

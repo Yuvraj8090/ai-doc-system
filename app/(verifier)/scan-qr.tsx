@@ -1,10 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Camera, CameraView } from "expo-camera";
-import { useRouter } from 'expo-router';
+import { CameraView, useCameraPermissions } from "expo-camera"; // Updated import
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Dimensions,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,53 +12,55 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 
-const { width } = Dimensions.get('window');
-
 export default function QRScanner() {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  const [isCameraOpen, setIsCameraOpen] = useState(false); // New State to control camera
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  
+  // NEW: Track which step of the process we are in
+  // If we have 'driverVerified=true' param, we are scanning the boat.
+  const params = useLocalSearchParams();
+  const step = params.step === 'boat' ? 2 : 1; 
+
   const router = useRouter();
 
   useEffect(() => {
-    const getPermissions = async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    };
-    getPermissions();
-  }, []);
+    if (!permission) {
+      requestPermission();
+    }
+  }, [permission]);
 
-  const handleBarCodeScanned = ({ type, data }: any) => {
+  const handleBarCodeScanned = ({ data }: any) => {
     setScanned(true);
-    setIsCameraOpen(false); // Close camera after scan
+    setIsCameraOpen(false);
     
     try {
-      const boatData = JSON.parse(data);
-      const isBlocked = boatData.boat_id === '104'; // Demo Logic
+      // In production, you would fetch API data here using the scanned ID
+      const scannedData = JSON.parse(data); 
 
-      // Go to Result Screen
+      // Navigate to the verification/decision screen
       router.push({
-        pathname: '/(verifier)/result',
+        pathname: '/(verifier)/result', // We will reuse result.tsx as the "Inspection" screen
         params: {
-          status: isBlocked ? 'blocked' : 'allowed',
-          boatName: boatData.boat_name,
-          boatId: boatData.boat_id,
-          sailCount: isBlocked ? '3' : '2'
+          id: scannedData.id,
+          name: scannedData.name,
+          type: step === 1 ? 'driver' : 'boat', // Tell next screen what we scanned
+          tripsToday: 1, // Demo data
+          maxTrips: 2,   // Demo data
+          previousDriverId: params.driverId // Pass driver ID if we are on step 2
         }
       });
       
-      // Reset scan state after delay
       setTimeout(() => setScanned(false), 1000);
     } catch (e) {
-      Alert.alert("Error", "Invalid QR Code");
+      Alert.alert("Error", "Invalid QR Code format");
       setScanned(false);
     }
   };
 
-  if (hasPermission === null) return <View style={styles.container} />;
-  if (hasPermission === false) return <View style={styles.container}><Text>No Camera Access</Text></View>;
+  if (!permission) return <View />;
+  if (!permission.granted) return <View style={styles.container}><Text>No Camera Access</Text></View>;
 
-  // 1. IF CAMERA IS OPEN, SHOW SCANNER VIEW
   if (isCameraOpen) {
     return (
       <View style={styles.fullScreenCamera}>
@@ -68,14 +69,12 @@ export default function QRScanner() {
           barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
           style={StyleSheet.absoluteFillObject}
         />
-        
-        {/* Overlay Frame */}
         <View style={styles.scanOverlay}>
-          <Text style={styles.scanText}>Align QR code within frame</Text>
-          <View style={styles.scanBox} />
+          <Text style={styles.scanText}>
+            {step === 1 ? "Scan DRIVER QR Code" : "Scan BOAT QR Code"}
+          </Text>
+          <View style={[styles.scanBox, { borderColor: step === 1 ? Colors.primary : Colors.warning }]} />
         </View>
-
-        {/* Close Button */}
         <TouchableOpacity style={styles.closeBtn} onPress={() => setIsCameraOpen(false)}>
            <Ionicons name="close" size={30} color="white" />
         </TouchableOpacity>
@@ -83,27 +82,20 @@ export default function QRScanner() {
     );
   }
 
-  // 2. DEFAULT DASHBOARD VIEW (NO CAMERA)
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello Officer,</Text>
-          <Text style={styles.subtitle}>Verification Point: Rishikesh</Text>
+          <Text style={styles.subtitle}>
+            {step === 1 ? "Ready to verify new raft" : "Step 2: Verify Boat"}
+          </Text>
         </View>
-        <TouchableOpacity 
-          style={styles.logoutBtn} 
-          onPress={() => router.replace('/(auth)/login')}
-        >
-           <Ionicons name="log-out-outline" size={24} color={Colors.danger} />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
-        {/* Big Scan Button */}
         <TouchableOpacity 
-          style={styles.scanButtonCard} 
+          style={[styles.scanButtonCard, step === 2 && { backgroundColor: Colors.warning }]} 
           onPress={() => {
             setScanned(false);
             setIsCameraOpen(true);
@@ -111,128 +103,35 @@ export default function QRScanner() {
           activeOpacity={0.8}
         >
           <View style={styles.iconCircle}>
-            <Ionicons name="qr-code-outline" size={60} color="white" />
+            <Ionicons name={step === 1 ? "person-outline" : "boat-outline"} size={60} color="white" />
           </View>
-          <Text style={styles.scanBtnText}>Verify New Boat</Text>
-          <Text style={styles.scanBtnSub}>Tap to open scanner</Text>
-        </TouchableOpacity>
-
-        {/* History Button */}
-        <TouchableOpacity 
-          style={styles.historyCard}
-          onPress={() => router.push('/(verifier)/history')}
-        >
-          <View style={styles.historyIcon}>
-            <Ionicons name="time-outline" size={30} color={Colors.primary} />
-          </View>
-          <View>
-            <Text style={styles.historyTitle}>View Activity Log</Text>
-            <Text style={styles.historySub}>Check today's scans</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#ccc" style={{marginLeft: 'auto'}} />
+          <Text style={styles.scanBtnText}>
+            {step === 1 ? "Scan Driver" : "Scan Boat"}
+          </Text>
+          <Text style={styles.scanBtnSub}>
+            {step === 1 ? "Tap to start verification" : "Tap to complete process"}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
+// ... styles remain the same ...
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  
-  // Dashboard Styles
-  header: {
-    padding: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  greeting: { fontSize: 22, fontWeight: 'bold', color: '#333' },
-  subtitle: { color: '#888', marginTop: 4 },
-  logoutBtn: { padding: 8, backgroundColor: '#ffebee', borderRadius: 8 },
-  
-  content: { flex: 1, padding: 24, justifyContent: 'center' },
-  
-  scanButtonCard: {
-    backgroundColor: Colors.primary,
-    borderRadius: 24,
-    padding: 40,
-    alignItems: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-    marginBottom: 30,
-  },
-  iconCircle: {
-    width: 100,
-    height: 100,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  scanBtnText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
-  scanBtnSub: { color: 'rgba(255,255,255,0.8)', fontSize: 16, marginTop: 5 },
-
-  historyCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  historyIcon: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#eff6ff',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  historyTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  historySub: { color: '#888', fontSize: 12 },
-
-  // Camera Styles
-  fullScreenCamera: { flex: 1, backgroundColor: 'black' },
-  closeBtn: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
-    borderRadius: 20,
-  },
-  scanOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanBox: {
-    width: 250,
-    height: 250,
-    borderWidth: 2,
-    borderColor: Colors.success,
-    backgroundColor: 'transparent',
-    borderRadius: 20,
-  },
-  scanText: {
-    color: 'white',
-    fontSize: 16,
-    marginBottom: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
+    // (Keep your existing styles)
+    container: { flex: 1, backgroundColor: '#F8F9FA' },
+    header: { padding: 24, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
+    greeting: { fontSize: 22, fontWeight: 'bold', color: '#333' },
+    subtitle: { color: '#888', marginTop: 4 },
+    content: { flex: 1, padding: 24, justifyContent: 'center' },
+    scanButtonCard: { backgroundColor: Colors.primary, borderRadius: 24, padding: 40, alignItems: 'center', elevation: 10 },
+    iconCircle: { width: 100, height: 100, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+    scanBtnText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
+    scanBtnSub: { color: 'rgba(255,255,255,0.8)', fontSize: 16, marginTop: 5 },
+    fullScreenCamera: { flex: 1, backgroundColor: 'black' },
+    scanOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    scanText: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 20, backgroundColor: 'rgba(0,0,0,0.6)', padding: 10, borderRadius: 8 },
+    scanBox: { width: 250, height: 250, borderWidth: 2, borderRadius: 20 },
+    closeBtn: { position: 'absolute', top: 50, right: 20, padding: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20 },
 });
